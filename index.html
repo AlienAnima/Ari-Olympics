@@ -31,7 +31,7 @@ input,select,textarea{width:100%;padding:10px;border-radius:10px;border:2px soli
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 </style></head><body><main id="app"></main>
 <script>
-const K='silvalympics-v1';
+const K='Arilympics-v1';
 let D=JSON.parse(localStorage.getItem(K)||'null')||{teams:[],games:[],matches:{},results:{},pw:'olympics'};
 const save=()=>localStorage.setItem(K,JSON.stringify(D));
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -51,7 +51,7 @@ function view(){
   if(r=='admin'&&sessionStorage.getItem('ok')!='1'){
     app.innerHTML=back('','Home')+'<h1>Administration</h1><div class="box"><label>Password<input id="pw" type="password" autocomplete="off"></label><button class="btn" onclick="login()">Unlock</button></div>';return}
   if(r=='home'){
-    h=rings()+'<h1>Silvalympics</h1><div class="grid">'+[['teams','Teams'],['schedule','Schedule'],['rules','Rules - Written'],['videos','Rules - YouTube'],['enter','Enter Results'],['standings','Standings'],['admin','Administration']].map((x,i)=>tile(x[0],x[1],i)).join('')+'</div>'}
+    h=rings()+'<h1>Arilympics</h1><div class="grid">'+[['teams','Teams'],['schedule','Schedule'],['rules','Rules - Written'],['videos','Rules - YouTube'],['enter','Enter Results'],['standings','Standings'],['admin','Administration']].map((x,i)=>tile(x[0],x[1],i)).join('')+'</div>'}
   else if(r=='teams'){
     h=back('','Home')+'<h1>Teams</h1>'+(D.teams.length?'<div class="grid">'+D.teams.map(t=>`<div class="box"><h3>${esc(t.name)}</h3>${t.members.map(m=>`<div>${esc(m)}</div>`).join('')||'<div class="muted">No members yet</div>'}<button class="btn" onclick="rename('${t.id}')">Rename team</button></div>`).join('')+'</div>':empty('No teams yet. Add them in Administration.'))}
   else if(r=='schedule'){
