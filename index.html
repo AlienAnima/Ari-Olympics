@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Arilympics</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -8,7 +8,7 @@
 @media(prefers-color-scheme:dark){:root{--bg:#101a2e;--ink:#f3f8ff;--card:#1b2943;--grey:#46546e}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:'Fredoka',system-ui,sans-serif;font-size:18px;line-height:1.4}
-main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+main{max-width:760px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top,0px)) 16px calc(60px + env(safe-area-inset-bottom,0px))}
 h1{font-size:2.2rem;margin:.2em 0;font-weight:700}h2{margin:.2em 0 .6em}
 .rings{display:flex;gap:6px;margin:6px 0 14px}.rings i{width:22px;height:22px;border-radius:50%;border:4px solid}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
@@ -27,13 +27,17 @@ input,select,textarea{width:100%;padding:10px;border-radius:10px;border:2px soli
 .rank{display:flex;align-items:center;gap:14px}.rank b{font-size:2rem;width:2.2rem;height:2.2rem;border-radius:50%;display:grid;place-items:center;background:var(--grey);flex:none}
 .rank.r1 b{background:#f4c300;color:#000}.rank.r2 b{background:#c0c4cc;color:#000}.rank.r3 b{background:#cd7f32;color:#000}
 .rank div{flex:1}.pts{font-size:1.6rem;font-weight:700}.muted{opacity:.7}
-.rules{white-space:pre-wrap}
+.rich{background:#fff;color:#111;line-height:1.5;overflow-wrap:anywhere}.rich table{border-collapse:collapse;max-width:100%}.rich td,.rich th{border:1px solid #bbb;padding:4px 8px}.rich ul,.rich ol{padding-left:1.4em}.rich a{color:#0066cc}
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 </style></head><body><main id="app"></main>
 <script>
-const K='Arilympics-v1';
-let D=JSON.parse(localStorage.getItem(K)||'null')||{teams:[],games:[],matches:{},results:{},pw:'olympics'};
-const save=()=>localStorage.setItem(K,JSON.stringify(D));
+const K='silvalympics-v1';
+let D=null;try{D=JSON.parse(localStorage.getItem(K)||'null')}catch(e){}
+D=D||{teams:[],games:[],matches:{},results:{},pw:'olympics'};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){}};
+let unlocked=false;
+const isOk=()=>{try{return sessionStorage.getItem('ok')=='1'}catch(e){return unlocked}};
+const setOk=v=>{unlocked=v;try{v?sessionStorage.setItem('ok','1'):sessionStorage.removeItem('ok')}catch(e){}};
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const T=id=>D.teams.find(t=>t.id==id),G=id=>D.games.find(g=>g.id==id);
@@ -43,12 +47,36 @@ const back=(h,t='Back')=>`<a class="back" href="#/${h}">&larr; ${t}</a>`;
 const tile=(h,t,i)=>`<a class="tile c${i%5}" href="#/${h}">${t}</a>`;
 const empty=t=>`<p class="muted">${t}</p>`;
 const val=id=>document.getElementById(id).value.trim();
+const OKT=new Set(['B','STRONG','I','EM','U','S','BR','P','DIV','SPAN','UL','OL','LI','H1','H2','H3','H4','A','TABLE','THEAD','TBODY','TR','TD','TH','BLOCKQUOTE','SUB','SUP']);
+const BAD=new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','LINK','META','FORM','INPUT','BUTTON','TEXTAREA','SELECT','SVG','MATH','TEMPLATE']);
+const OKS=['color','background-color','font-weight','font-style','text-decoration','text-align'];
+function clean(html){
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  (function walk(n){
+    [...n.childNodes].forEach(c=>{
+      if(c.nodeType==3)return;
+      if(c.nodeType!=1||BAD.has(c.tagName.toUpperCase())){c.remove();return}
+      walk(c);
+      if(!OKT.has(c.tagName)){c.replaceWith(...c.childNodes);return}
+      const keep=[];
+      OKS.forEach(p=>{const v=c.style.getPropertyValue(p);if(v&&!/url|expression|javascript/i.test(v))keep.push(p+':'+v)});
+      const raw=c.tagName=='A'?(c.getAttribute('href')||''):'';
+      [...c.attributes].forEach(a=>c.removeAttribute(a.name));
+      if(keep.length)c.setAttribute('style',keep.join(';'));
+      if(/^https?:\/\//i.test(raw)){c.setAttribute('href',raw);c.setAttribute('target','_blank');c.setAttribute('rel','noopener')}
+    });
+  })(doc.body);
+  return doc.body.innerHTML
+}
+const rulesHtml=g=>g.html?clean(g.html):esc(g.rules||'Rules have not been written yet.').replace(/\n/g,'<br>');
+const rulesEdit=g=>g.html?clean(g.html):esc(g.rules||'').replace(/\n/g,'<br>');
+const fmt=c=>document.execCommand(c);
 
 function wins(id){let w=0,l=0;const r=D.results[id]||{};for(const g of D.games){if(r[g.id]=='w')w++;if(r[g.id]=='l')l++}return{w,l}}
 
 function view(){
   const p=(location.hash.replace(/^#\/?/,'')||'home').split('/'),r=p[0],a=p[1];let h='';
-  if(r=='admin'&&sessionStorage.getItem('ok')!='1'){
+  if(r=='admin'&&!isOk()){
     app.innerHTML=back('','Home')+'<h1>Administration</h1><div class="box"><label>Password<input id="pw" type="password" autocomplete="off"></label><button class="btn" onclick="login()">Unlock</button></div>';return}
   if(r=='home'){
     h=rings()+'<h1>Arilympics</h1><div class="grid">'+[['teams','Teams'],['schedule','Schedule'],['rules','Rules - Written'],['videos','Rules - YouTube'],['enter','Enter Results'],['standings','Standings'],['admin','Administration']].map((x,i)=>tile(x[0],x[1],i)).join('')+'</div>'}
@@ -59,7 +87,7 @@ function view(){
   else if(r=='rules'&&!a){
     h=back('','Home')+'<h1>Rules - Written</h1>'+(D.games.length?'<div class="grid">'+D.games.map((g,i)=>tile('rules/'+g.id,esc(g.name),i)).join('')+'</div>':empty('No games yet.'))}
   else if(r=='rules'){
-    const g=G(a);h=back('rules','All rules')+(g?`<h1>${esc(g.name)}</h1><div class="box rules">${esc(g.rules||'Rules have not been written yet.')}</div>`:empty('Game not found.'))}
+    const g=G(a);h=back('rules','All rules')+(g?`<h1>${esc(g.name)}</h1><div class="box rich">${rulesHtml(g)}</div>`:empty('Game not found.'))}
   else if(r=='videos'){
     h=back('','Home')+'<h1>Rules - YouTube</h1>'+(D.games.length?D.games.map(g=>`<div class="box"><h3>${esc(g.name)}</h3>${/^https?:\/\//i.test(g.video||'')?`<a class="btn" style="display:inline-block;text-decoration:none" href="${esc(g.video)}" target="_blank" rel="noopener">Watch video</a>`:'<span class="muted">No video yet</span>'}</div>`).join(''):empty('No games yet.'))}
   else if(r=='enter'&&!a){
@@ -81,14 +109,14 @@ function view(){
   else if(r=='admin'&&a=='rules'&&!p[2]){
     h=back('admin','Admin')+'<h1>Write rules</h1>'+(D.games.length?'<div class="grid">'+D.games.map((g,i)=>tile('admin/rules/'+g.id,esc(g.name),i)).join('')+'</div>':empty('Add games first.'))}
   else if(r=='admin'&&a=='rules'){
-    const g=G(p[2]);h=back('admin/rules','All games')+(g?`<h1>${esc(g.name)}</h1><textarea id="rt" rows="12" placeholder="Type the rules here">${esc(g.rules||'')}</textarea><button class="btn" onclick="saveRules('${g.id}')">Save rules</button><span id="ok" class="muted"></span>`:empty('Game not found.'))}
+    const g=G(p[2]);h=back('admin/rules','All games')+(g?`<h1>${esc(g.name)}</h1><p class="muted">Paste rules from another page or document and the formatting stays.</p><div><button class="btn" onmousedown="event.preventDefault()" onclick="fmt('bold')"><b>B</b></button><button class="btn" onmousedown="event.preventDefault()" onclick="fmt('italic')"><i>I</i></button><button class="btn" onmousedown="event.preventDefault()" onclick="fmt('underline')"><u>U</u></button><button class="btn" onmousedown="event.preventDefault()" onclick="fmt('insertUnorderedList')">Bullets</button></div><div id="rt" class="rich" contenteditable="true" style="min-height:240px;border:2px solid var(--grey);border-radius:10px;padding:10px;margin:6px 0">${rulesEdit(g)}</div><button class="btn" onclick="saveRules('${g.id}')">Save rules</button><span id="ok" class="muted"></span>`:empty('Game not found.'))}
   else if(r=='admin'&&a=='videos'){
     h=back('admin','Admin')+'<h1>YouTube links</h1>'+(D.games.length?D.games.map(g=>`<div class="box"><h3>${esc(g.name)}</h3><input value="${esc(g.video||'')}" placeholder="https://youtube.com/..." onchange="setV('${g.id}',this.value)"></div>`).join(''):empty('Add games first.'))}
   else h=back('','Home')+empty('Page not found.');
   app.innerHTML=h;window.scrollTo(0,0)
 }
-function login(){if(val('pw')==D.pw){sessionStorage.setItem('ok','1');view()}else alert('Wrong password')}
-function logout(){sessionStorage.removeItem('ok');location.hash='#/'}
+function login(){if(val('pw')==D.pw){setOk(true);view()}else alert('Wrong password')}
+function logout(){setOk(false);location.hash='#/'}
 function chpw(){const n=prompt('New password');if(n){D.pw=n;save();alert('Password changed')}}
 function resetScores(){if(confirm('Clear every win and loss?')){D.results={};save();alert('Scores cleared')}}
 function rename(id){const t=T(id),n=prompt('Team name',t.name);if(n&&n.trim()){t.name=n.trim();save();view()}}
@@ -99,7 +127,7 @@ function delMember(id,i){T(id).members.splice(i,1);save();view()}
 function addGame(){const n=val('ng');if(!n)return;D.games.push({id:uid(),name:n,rules:'',video:''});save();view()}
 function delGame(id){if(!confirm('Delete this game?'))return;D.games=D.games.filter(g=>g.id!=id);delete D.matches[id];save();view()}
 function setM(g,f,v){(D.matches[g]=D.matches[g]||{})[f]=v;save()}
-function saveRules(id){G(id).rules=document.getElementById('rt').value;save();document.getElementById('ok').textContent=' Saved'}
+function saveRules(id){const e=document.getElementById('rt'),g=G(id);g.rules=e.innerText.trim();g.html=g.rules?clean(e.innerHTML):'';save();document.getElementById('ok').textContent=' Saved'}
 function setV(id,v){G(id).video=v.trim();save()}
 function tog(t,g){const r=D.results[t]=D.results[t]||{};r[g]=!r[g]?'w':r[g]=='w'?'l':null;save();view()}
 addEventListener('hashchange',view);view();
