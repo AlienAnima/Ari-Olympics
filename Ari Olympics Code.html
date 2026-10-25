@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Silvalympics</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f8ff;--ink:#14213d;--blue:#0085c7;--yellow:#f4c300;--green:#009f3d;--red:#df0024;--grey:#d5dae2;--card:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#101a2e;--ink:#f3f8ff;--card:#1b2943;--grey:#46546e}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Fredoka',system-ui,sans-serif;font-size:18px;line-height:1.4}
+main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:2.2rem;margin:.2em 0;font-weight:700}h2{margin:.2em 0 .6em}
+.rings{display:flex;gap:6px;margin:6px 0 14px}.rings i{width:22px;height:22px;border-radius:50%;border:4px solid}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.tile{display:block;color:#fff;text-decoration:none;padding:22px 16px;border-radius:18px;font-weight:600;font-size:1.25rem;border:0;text-align:left;font-family:inherit;cursor:pointer}
+.c0{background:var(--blue)}.c1{background:#b88f00}.c2{background:var(--green)}.c3{background:var(--red)}.c4{background:#2b2b2b}
+.box{background:var(--card);border-radius:16px;padding:16px;margin:10px 0;border:3px solid var(--grey)}
+.box h3{margin:0 0 6px}
+a{color:var(--blue)}.back{display:inline-block;margin-bottom:8px;font-weight:600}
+input,select,textarea,button{font:inherit;color:inherit}
+input,select,textarea{width:100%;padding:10px;border-radius:10px;border:2px solid var(--grey);background:var(--card);margin:4px 0}
+.btn{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;font-weight:600;margin:4px 4px 4px 0}
+.btn.del{background:var(--red)}.btn.alt{background:var(--green)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>input{flex:1;min-width:140px;width:auto}
+.tg{width:100%;padding:18px;border-radius:14px;border:0;font-weight:700;font-size:1.2rem;cursor:pointer;background:var(--grey);color:var(--ink);margin-top:6px}
+.tg.w{background:var(--green);color:#fff}.tg.l{background:var(--red);color:#fff}
+.rank{display:flex;align-items:center;gap:14px}.rank b{font-size:2rem;width:2.2rem;height:2.2rem;border-radius:50%;display:grid;place-items:center;background:var(--grey);flex:none}
+.rank.r1 b{background:#f4c300;color:#000}.rank.r2 b{background:#c0c4cc;color:#000}.rank.r3 b{background:#cd7f32;color:#000}
+.rank div{flex:1}.pts{font-size:1.6rem;font-weight:700}.muted{opacity:.7}
+.rules{white-space:pre-wrap}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+</style></head><body><main id="app"></main>
+<script>
+const K='silvalympics-v1';
+let D=JSON.parse(localStorage.getItem(K)||'null')||{teams:[],games:[],matches:{},results:{},pw:'olympics'};
+const save=()=>localStorage.setItem(K,JSON.stringify(D));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const T=id=>D.teams.find(t=>t.id==id),G=id=>D.games.find(g=>g.id==id);
+const app=document.getElementById('app');
+const rings=()=>'<div class="rings"><i style="color:#0085c7"></i><i style="color:#f4c300"></i><i style="color:#2b2b2b"></i><i style="color:#009f3d"></i><i style="color:#df0024"></i></div>';
+const back=(h,t='Back')=>`<a class="back" href="#/${h}">&larr; ${t}</a>`;
+const tile=(h,t,i)=>`<a class="tile c${i%5}" href="#/${h}">${t}</a>`;
+const empty=t=>`<p class="muted">${t}</p>`;
+const val=id=>document.getElementById(id).value.trim();
+
+function wins(id){let w=0,l=0;const r=D.results[id]||{};for(const g of D.games){if(r[g.id]=='w')w++;if(r[g.id]=='l')l++}return{w,l}}
+
+function view(){
+  const p=(location.hash.replace(/^#\/?/,'')||'home').split('/'),r=p[0],a=p[1];let h='';
+  if(r=='admin'&&sessionStorage.getItem('ok')!='1'){
+    app.innerHTML=back('','Home')+'<h1>Administration</h1><div class="box"><label>Password<input id="pw" type="password" autocomplete="off"></label><button class="btn" onclick="login()">Unlock</button></div>';return}
+  if(r=='home'){
+    h=rings()+'<h1>Silvalympics</h1><div class="grid">'+[['teams','Teams'],['schedule','Schedule'],['rules','Rules - Written'],['videos','Rules - YouTube'],['enter','Enter Results'],['standings','Standings'],['admin','Administration']].map((x,i)=>tile(x[0],x[1],i)).join('')+'</div>'}
+  else if(r=='teams'){
+    h=back('','Home')+'<h1>Teams</h1>'+(D.teams.length?'<div class="grid">'+D.teams.map(t=>`<div class="box"><h3>${esc(t.name)}</h3>${t.members.map(m=>`<div>${esc(m)}</div>`).join('')||'<div class="muted">No members yet</div>'}<button class="btn" onclick="rename('${t.id}')">Rename team</button></div>`).join('')+'</div>':empty('No teams yet. Add them in Administration.'))}
+  else if(r=='schedule'){
+    h=back('','Home')+'<h1>Schedule</h1>'+(D.games.length?D.games.map(g=>{const m=D.matches[g.id]||{};const A=T(m.a),B=T(m.b);return`<div class="box"><h3>${esc(g.name)}</h3><div>${esc(m.time||'Time to be set')}</div><div>${A&&B?esc(A.name)+' vs '+esc(B.name):'Matchup to be set'}</div></div>`}).join(''):empty('No games yet. Add them in Administration.'))}
+  else if(r=='rules'&&!a){
+    h=back('','Home')+'<h1>Rules - Written</h1>'+(D.games.length?'<div class="grid">'+D.games.map((g,i)=>tile('rules/'+g.id,esc(g.name),i)).join('')+'</div>':empty('No games yet.'))}
+  else if(r=='rules'){
+    const g=G(a);h=back('rules','All rules')+(g?`<h1>${esc(g.name)}</h1><div class="box rules">${esc(g.rules||'Rules have not been written yet.')}</div>`:empty('Game not found.'))}
+  else if(r=='videos'){
+    h=back('','Home')+'<h1>Rules - YouTube</h1>'+(D.games.length?D.games.map(g=>`<div class="box"><h3>${esc(g.name)}</h3>${/^https?:\/\//i.test(g.video||'')?`<a class="btn" style="display:inline-block;text-decoration:none" href="${esc(g.video)}" target="_blank" rel="noopener">Watch video</a>`:'<span class="muted">No video yet</span>'}</div>`).join(''):empty('No games yet.'))}
+  else if(r=='enter'&&!a){
+    h=back('','Home')+'<h1>Enter Results</h1><p>Pick your team.</p>'+(D.teams.length?'<div class="grid">'+D.teams.map((t,i)=>tile('enter/'+t.id,esc(t.name),i)).join('')+'</div>':empty('No teams yet.'))}
+  else if(r=='enter'){
+    const t=T(a);h=back('enter','Teams')+(t?`<h1>${esc(t.name)}</h1><p>Tap a box: once for win, twice for lose, three times to clear.</p>`+(D.games.length?D.games.map(g=>{const s=(D.results[t.id]||{})[g.id];return`<div class="box"><h3>${esc(g.name)}</h3><button class="tg ${s||''}" onclick="tog('${t.id}','${g.id}')">${s=='w'?'WIN':s=='l'?'LOSE':'Tap to score'}</button></div>`}).join(''):empty('No games yet.')):empty('Team not found.'))}
+  else if(r=='standings'){
+    const rows=D.teams.map(t=>({t,...wins(t.id)})).sort((x,y)=>y.w-x.w||x.l-y.l);
+    h=back('','Home')+'<h1>Standings</h1>'+(rows.length?rows.map((x,i)=>`<div class="box rank r${i+1}"><b>${i+1}</b><div><h3>${esc(x.t.name)}</h3><span class="muted">${x.w} wins, ${x.l} losses</span></div><span class="pts">${x.w}</span></div>`).join(''):empty('No teams yet.'))}
+  else if(r=='admin'&&!a){
+    h=back('','Home')+'<h1>Administration</h1><div class="grid">'+[['admin/teams','Teams'],['admin/schedule','Schedule'],['admin/rules','Rules - Written'],['admin/videos','Rules - YouTube']].map((x,i)=>tile(x[0],x[1],i)).join('')+'</div><div class="box"><button class="btn alt" onclick="chpw()">Change password</button><button class="btn" onclick="logout()">Lock</button><button class="btn del" onclick="resetScores()">Clear all scores</button></div>'}
+  else if(r=='admin'&&a=='teams'){
+    h=back('admin','Admin')+'<h1>Manage teams</h1><div class="box row"><input id="nt" placeholder="New team name"><button class="btn" onclick="addTeam()">Add team</button></div>'+D.teams.map(t=>`<div class="box"><h3>${esc(t.name)}</h3>${t.members.map((m,i)=>`<div class="row"><span style="flex:1">${esc(m)}</span><button class="btn del" onclick="delMember('${t.id}',${i})">Remove</button></div>`).join('')}${t.members.length<2?`<div class="row"><input id="m${t.id}" placeholder="Member name"><button class="btn" onclick="addMember('${t.id}')">Add member</button></div>`:'<div class="muted">Team is full (2 members)</div>'}<button class="btn del" onclick="delTeam('${t.id}')">Delete team</button></div>`).join('')}
+  else if(r=='admin'&&a=='schedule'){
+    h=back('admin','Admin')+'<h1>Manage games</h1><div class="box row"><input id="ng" placeholder="New game name"><button class="btn" onclick="addGame()">Add game</button></div>'+D.games.map(g=>`<div class="box row"><span style="flex:1">${esc(g.name)}</span><button class="btn del" onclick="delGame('${g.id}')">Delete</button></div>`).join('')+'<p><a class="btn" style="display:inline-block;text-decoration:none" href="#/admin/scheduling">Go to scheduling</a></p>'}
+  else if(r=='admin'&&a=='scheduling'){
+    const opts=s=>'<option value="">Choose team</option>'+D.teams.map(t=>`<option value="${t.id}"${t.id==s?' selected':''}>${esc(t.name)}</option>`).join('');
+    h=back('admin/schedule','Games')+'<h1>Scheduling</h1>'+(D.games.length?D.games.map(g=>{const m=D.matches[g.id]||{};return`<div class="box"><h3>${esc(g.name)}</h3><input value="${esc(m.time||'')}" placeholder="Time slot, e.g. 10:00 AM" onchange="setM('${g.id}','time',this.value)"><select onchange="setM('${g.id}','a',this.value)">${opts(m.a)}</select><select onchange="setM('${g.id}','b',this.value)">${opts(m.b)}</select></div>`}).join(''):empty('Add games first.'))}
+  else if(r=='admin'&&a=='rules'&&!p[2]){
+    h=back('admin','Admin')+'<h1>Write rules</h1>'+(D.games.length?'<div class="grid">'+D.games.map((g,i)=>tile('admin/rules/'+g.id,esc(g.name),i)).join('')+'</div>':empty('Add games first.'))}
+  else if(r=='admin'&&a=='rules'){
+    const g=G(p[2]);h=back('admin/rules','All games')+(g?`<h1>${esc(g.name)}</h1><textarea id="rt" rows="12" placeholder="Type the rules here">${esc(g.rules||'')}</textarea><button class="btn" onclick="saveRules('${g.id}')">Save rules</button><span id="ok" class="muted"></span>`:empty('Game not found.'))}
+  else if(r=='admin'&&a=='videos'){
+    h=back('admin','Admin')+'<h1>YouTube links</h1>'+(D.games.length?D.games.map(g=>`<div class="box"><h3>${esc(g.name)}</h3><input value="${esc(g.video||'')}" placeholder="https://youtube.com/..." onchange="setV('${g.id}',this.value)"></div>`).join(''):empty('Add games first.'))}
+  else h=back('','Home')+empty('Page not found.');
+  app.innerHTML=h;window.scrollTo(0,0)
+}
+function login(){if(val('pw')==D.pw){sessionStorage.setItem('ok','1');view()}else alert('Wrong password')}
+function logout(){sessionStorage.removeItem('ok');location.hash='#/'}
+function chpw(){const n=prompt('New password');if(n){D.pw=n;save();alert('Password changed')}}
+function resetScores(){if(confirm('Clear every win and loss?')){D.results={};save();alert('Scores cleared')}}
+function rename(id){const t=T(id),n=prompt('Team name',t.name);if(n&&n.trim()){t.name=n.trim();save();view()}}
+function addTeam(){const n=val('nt');if(!n)return;D.teams.push({id:uid(),name:n,members:[]});save();view()}
+function delTeam(id){if(!confirm('Delete this team and its scores?'))return;D.teams=D.teams.filter(t=>t.id!=id);delete D.results[id];for(const k in D.matches){const m=D.matches[k];if(m.a==id)m.a='';if(m.b==id)m.b=''}save();view()}
+function addMember(id){const n=val('m'+id),t=T(id);if(!n||t.members.length>=2)return;t.members.push(n);save();view()}
+function delMember(id,i){T(id).members.splice(i,1);save();view()}
+function addGame(){const n=val('ng');if(!n)return;D.games.push({id:uid(),name:n,rules:'',video:''});save();view()}
+function delGame(id){if(!confirm('Delete this game?'))return;D.games=D.games.filter(g=>g.id!=id);delete D.matches[id];save();view()}
+function setM(g,f,v){(D.matches[g]=D.matches[g]||{})[f]=v;save()}
+function saveRules(id){G(id).rules=document.getElementById('rt').value;save();document.getElementById('ok').textContent=' Saved'}
+function setV(id,v){G(id).video=v.trim();save()}
+function tog(t,g){const r=D.results[t]=D.results[t]||{};r[g]=!r[g]?'w':r[g]=='w'?'l':null;save();view()}
+addEventListener('hashchange',view);view();
+</script></body></html>
