@@ -31,10 +31,28 @@ input,select,textarea{width:100%;padding:10px;border-radius:10px;border:2px soli
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 </style></head><body><main id="app"></main>
 <script>
+const DB=''; // Paste your Firebase Realtime Database address between the quotes
 const K='silvalympics-v1';
-let D=null;try{D=JSON.parse(localStorage.getItem(K)||'null')}catch(e){}
-D=D||{teams:[],games:[],matches:{},results:{},pw:'olympics'};
-const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){alert('Could not save. Storage may be full. Try smaller pictures.')}};
+const arr=v=>Array.isArray(v)?v.filter(Boolean):Object.values(v||{});
+const mig=ms=>{const o={};for(const g in ms||{}){const m=ms[g]||{};if(typeof m.time=='string'||'a' in m||'b' in m){const n={};if(m.a)n[m.a]={opp:m.b||'',time:m.time||''};if(m.b)n[m.b]={opp:m.a||'',time:m.time||''};o[g]=n}else o[g]=m}return o};
+const norm=x=>{x=x||{};return{teams:arr(x.teams).map(t=>({...t,members:arr(t.members)})),games:arr(x.games),matches:mig(x.matches),results:x.results||{},pw:x.pw||'olympics'}};
+const getLocal=()=>{try{return JSON.parse(localStorage.getItem(K)||'null')}catch(e){return null}};
+let D=norm(DB?null:getLocal());
+const base=()=>DB.replace(/\/$/,'');
+function put(path,val){fetch(base()+'/'+path+'.json',{method:val==null?'DELETE':'PUT',body:val==null?undefined:JSON.stringify(val)}).catch(()=>{})}
+const PARTS=['teams','games','matches','pw'];
+const save=p=>{if(DB){(p?[p]:PARTS).forEach(k=>put(k,D[k]));return}try{localStorage.setItem(K,JSON.stringify(D))}catch(e){alert('Could not save. Storage may be full. Try smaller pictures.')}};
+let last=null;
+async function pull(first){
+  if(!DB)return;
+  try{
+    const x=await(await fetch(base()+'/.json')).json(),s=JSON.stringify(x);
+    if(first&&x==null){const l=getLocal();if(l){D=norm(l);save();save('results');last=null;view();return}}
+    if(s===last)return;last=s;D=norm(x);
+    const a=document.activeElement;
+    if(first||!(a&&a.closest&&a.closest('#app')&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))){const y=scrollY;view();scrollTo(0,y)}
+  }catch(e){if(first)view()}
+}
 let unlocked=false;
 const isOk=()=>{try{return sessionStorage.getItem('ok')=='1'}catch(e){return unlocked}};
 const setOk=v=>{unlocked=v;try{v?sessionStorage.setItem('ok','1'):sessionStorage.removeItem('ok')}catch(e){}};
@@ -83,9 +101,11 @@ function view(){
   if(r=='home'){
     h=rings()+'<h1>Arilympics</h1><div class="grid">'+[['teams','Teams'],['schedule','Schedule'],['rules','Rules - Written'],['videos','Rules - YouTube'],['enter','Enter Results'],['standings','Standings'],['admin','Administration']].map((x,i)=>tile(x[0],x[1],i)).join('')+'</div>'}
   else if(r=='teams'){
-    h=back('','Home')+'<h1>Teams</h1>'+(D.teams.length?'<div class="grid">'+D.teams.map(t=>`<div class="box"><h3>${esc(t.name)}</h3>${t.members.map(m=>`<div>${esc(m)}</div>`).join('')||'<div class="muted">No members yet</div>'}<button class="btn" onclick="rename('${t.id}')">Rename team</button></div>`).join('')+'</div>':empty('No teams yet. Add them in Administration.'))}
+    h=back('','Home')+'<h1>Teams</h1><p class="muted">Tap a team name to see its games.</p>'+(D.teams.length?'<div class="grid">'+D.teams.map(t=>`<div class="box"><h3><a href="#/schedule/${t.id}">${esc(t.name)}</a></h3>${t.members.map(m=>`<div>${esc(m)}</div>`).join('')||'<div class="muted">No members yet</div>'}<button class="btn" onclick="rename('${t.id}')">Rename team</button></div>`).join('')+'</div>':empty('No teams yet. Add them in Administration.'))}
+  else if(r=='schedule'&&a){
+    const t=T(a);h=back('teams','Teams')+(t?`<h1>${esc(t.name)}</h1>`+(D.games.length?D.games.map(g=>{const e=(D.matches[g.id]||{})[t.id]||{},o=T(e.opp);return`<div class="box"><h3>${esc(g.name)}</h3><div>${esc(e.time||'Time to be set')}</div><div>${o?'vs '+esc(o.name):'Opponent to be set'}</div><a href="#/rules/${g.id}">Read the rules</a></div>`}).join(''):empty('No games yet.')):empty('Team not found.'))}
   else if(r=='schedule'){
-    h=back('','Home')+'<h1>Schedule</h1>'+(D.games.length?D.games.map(g=>{const m=D.matches[g.id]||{};const A=T(m.a),B=T(m.b);return`<div class="box"><h3>${esc(g.name)}</h3><div>${esc(m.time||'Time to be set')}</div><div>${A&&B?esc(A.name)+' vs '+esc(B.name):'Matchup to be set'}</div></div>`}).join(''):empty('No games yet. Add them in Administration.'))}
+    h=back('','Home')+'<h1>Schedule</h1>'+(D.games.length?D.games.map(g=>{const m=D.matches[g.id]||{},seen={},L=x=>`<a href="#/schedule/${x.id}">${esc(x.name)}</a>`;const rows=D.teams.map(t=>{if(seen[t.id])return'';const e=m[t.id]||{},o=T(e.opp);seen[t.id]=1;if(o)seen[o.id]=1;return`<div>${esc(e.time||'Time to be set')}: ${o?L(t)+' vs '+L(o):L(t)+' (opponent to be set)'}</div>`}).join('');return`<div class="box"><h3>${esc(g.name)}</h3>${rows||'<span class="muted">No teams yet</span>'}</div>`}).join(''):empty('No games yet. Add them in Administration.'))}
   else if(r=='rules'&&!a){
     h=back('','Home')+'<h1>Rules - Written</h1>'+(D.games.length?'<div class="grid">'+D.games.map((g,i)=>tile('rules/'+g.id,esc(g.name),i)).join('')+'</div>':empty('No games yet.'))}
   else if(r=='rules'){
@@ -106,8 +126,12 @@ function view(){
   else if(r=='admin'&&a=='schedule'){
     h=back('admin','Admin')+'<h1>Manage games</h1><div class="box row"><input id="ng" placeholder="New game name"><button class="btn" onclick="addGame()">Add game</button></div>'+D.games.map(g=>`<div class="box row"><span style="flex:1">${esc(g.name)}</span><button class="btn del" onclick="delGame('${g.id}')">Delete</button></div>`).join('')+'<p><a class="btn" style="display:inline-block;text-decoration:none" href="#/admin/scheduling">Go to scheduling</a></p>'}
   else if(r=='admin'&&a=='scheduling'){
-    const opts=s=>'<option value="">Choose team</option>'+D.teams.map(t=>`<option value="${t.id}"${t.id==s?' selected':''}>${esc(t.name)}</option>`).join('');
-    h=back('admin/schedule','Games')+'<h1>Scheduling</h1>'+(D.games.length?D.games.map(g=>{const m=D.matches[g.id]||{};return`<div class="box"><h3>${esc(g.name)}</h3><input value="${esc(m.time||'')}" placeholder="Time slot, e.g. 10:00 AM" onchange="setM('${g.id}','time',this.value)"><select onchange="setM('${g.id}','a',this.value)">${opts(m.a)}</select><select onchange="setM('${g.id}','b',this.value)">${opts(m.b)}</select></div>`}).join(''):empty('Add games first.'))}
+    const rowFor=(t,g)=>{const m=D.matches[g.id]||{},e=m[t.id]||{};
+      const opts='<option value="">No opponent yet</option>'+D.teams.filter(x=>x.id!=t.id).map(x=>{const xo=(m[x.id]||{}).opp,busy=xo&&xo!=t.id;return`<option value="${x.id}"${x.id==e.opp?' selected':''}${busy?' disabled':''}>${esc(x.name)}${busy?' (already playing '+esc((T(xo)||{}).name||'')+')':''}</option>`}).join('');
+      const tm=o=>(((D.matches[o.id]||{})[t.id]||{}).time||'').trim().toLowerCase();
+      const clash=e.time&&D.games.find(o=>o.id!=g.id&&tm(o)==e.time.trim().toLowerCase());
+      return`<div class="row" style="margin:8px 0"><b style="min-width:120px">${esc(g.name)}</b><input value="${esc(e.time||'')}" placeholder="Time slot" onchange="setTime('${g.id}','${t.id}',this.value)"><select style="flex:1;min-width:150px;width:auto" onchange="setOpp('${g.id}','${t.id}',this.value)">${opts}</select>${clash?`<span style="color:var(--red)">Same time as ${esc(clash.name)}</span>`:''}</div>`};
+    h=back('admin/schedule','Games')+'<h1>Scheduling</h1><p class="muted">Pick an opponent and the same game is filled in for them too.</p>'+(D.teams.length&&D.games.length?D.teams.map(t=>`<div class="box"><h3>${esc(t.name)}</h3>${D.games.map(g=>rowFor(t,g)).join('')}</div>`).join(''):empty('Add teams and games first.'))}
   else if(r=='admin'&&a=='rules'&&!p[2]){
     h=back('admin','Admin')+'<h1>Write rules</h1>'+(D.games.length?'<div class="grid">'+D.games.map((g,i)=>tile('admin/rules/'+g.id,esc(g.name),i)).join('')+'</div>':empty('Add games first.'))}
   else if(r=='admin'&&a=='rules'){
@@ -120,15 +144,19 @@ function view(){
 function login(){if(val('pw')==D.pw){setOk(true);view()}else alert('Wrong password')}
 function logout(){setOk(false);location.hash='#/'}
 function chpw(){const n=prompt('New password');if(n){D.pw=n;save();alert('Password changed')}}
-function resetScores(){if(confirm('Clear every win and loss?')){D.results={};save();alert('Scores cleared')}}
+function resetScores(){if(confirm('Clear every win and loss?')){D.results={};save('results');alert('Scores cleared')}}
 function rename(id){const t=T(id),n=prompt('Team name',t.name);if(n&&n.trim()){t.name=n.trim();save();view()}}
 function addTeam(){const n=val('nt');if(!n)return;D.teams.push({id:uid(),name:n,members:[]});save();view()}
-function delTeam(id){if(!confirm('Delete this team and its scores?'))return;D.teams=D.teams.filter(t=>t.id!=id);delete D.results[id];for(const k in D.matches){const m=D.matches[k];if(m.a==id)m.a='';if(m.b==id)m.b=''}save();view()}
+function delTeam(id){if(!confirm('Delete this team and its scores?'))return;D.teams=D.teams.filter(t=>t.id!=id);delete D.results[id];for(const k in D.matches){const m=D.matches[k];delete m[id];for(const x in m)if(m[x].opp==id)m[x].opp=''}save();save('results');view()}
 function addMember(id){const n=val('m'+id),t=T(id);if(!n||t.members.length>=2)return;t.members.push(n);save();view()}
 function delMember(id,i){T(id).members.splice(i,1);save();view()}
 function addGame(){const n=val('ng');if(!n)return;D.games.push({id:uid(),name:n,rules:'',video:''});save();view()}
 function delGame(id){if(!confirm('Delete this game?'))return;D.games=D.games.filter(g=>g.id!=id);delete D.matches[id];save();view()}
-function setM(g,f,v){(D.matches[g]=D.matches[g]||{})[f]=v;save()}
+const rv=()=>{const y=scrollY;view();scrollTo(0,y)};
+const E=(g,t)=>{const m=D.matches[g]=D.matches[g]||{};return m[t]=m[t]||{opp:'',time:''}};
+function unpair(g,t){const m=D.matches[g]||{},e=m[t];if(!e)return;if(e.opp&&m[e.opp]&&m[e.opp].opp==t)m[e.opp].opp='';e.opp=''}
+function setOpp(g,t,o){unpair(g,t);if(o){unpair(g,o);const a=E(g,t),b=E(g,o),tm=a.time||b.time||'';a.opp=o;b.opp=t;a.time=tm;b.time=tm}save('matches');rv()}
+function setTime(g,t,v){const e=E(g,t);e.time=v.trim();if(e.opp)E(g,e.opp).time=e.time;save('matches');rv()}
 async function saveRules(id){
   const e=document.getElementById('rt'),g=G(id),ok=document.getElementById('ok');ok.textContent=' Saving...';
   for(const im of [...e.querySelectorAll('img')]){try{const b=await(await fetch(im.src)).blob();im.src=await new Promise(r=>shrink(b,r))}catch(x){}}
@@ -137,6 +165,6 @@ async function saveRules(id){
   ok.textContent=k<n?' Saved, but a picture could not be kept. Use the Add picture button.':' Saved'}
 function addPic(inp){const f=inp.files[0];if(!f)return;shrink(f,u=>{const i=document.createElement('img'),d=document.getElementById('rt');i.src=u;d.appendChild(document.createElement('br'));d.appendChild(i);inp.value=''})}
 function setV(id,v){G(id).video=v.trim();save()}
-function tog(t,g){const r=D.results[t]=D.results[t]||{};r[g]=!r[g]?'w':r[g]=='w'?'l':null;save();view()}
-addEventListener('hashchange',view);view();
+function tog(t,g){const r=D.results[t]=D.results[t]||{};r[g]=!r[g]?'w':r[g]=='w'?'l':null;if(DB)put('results/'+t+'/'+g,r[g]);else save();view()}
+addEventListener('hashchange',view);view();pull(true);setInterval(pull,5000);
 </script></body></html>
