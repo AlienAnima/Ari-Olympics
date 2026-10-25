@@ -27,14 +27,14 @@ input,select,textarea{width:100%;padding:10px;border-radius:10px;border:2px soli
 .rank{display:flex;align-items:center;gap:14px}.rank b{font-size:2rem;width:2.2rem;height:2.2rem;border-radius:50%;display:grid;place-items:center;background:var(--grey);flex:none}
 .rank.r1 b{background:#f4c300;color:#000}.rank.r2 b{background:#c0c4cc;color:#000}.rank.r3 b{background:#cd7f32;color:#000}
 .rank div{flex:1}.pts{font-size:1.6rem;font-weight:700}.muted{opacity:.7}
-.rich{background:#fff;color:#111;line-height:1.5;overflow-wrap:anywhere}.rich table{border-collapse:collapse;max-width:100%}.rich td,.rich th{border:1px solid #bbb;padding:4px 8px}.rich ul,.rich ol{padding-left:1.4em}.rich a{color:#0066cc}
+.rich{background:#fff;color:#111;line-height:1.5;overflow-wrap:anywhere}.rich table{border-collapse:collapse;max-width:100%}.rich td,.rich th{border:1px solid #bbb;padding:4px 8px}.rich ul,.rich ol{padding-left:1.4em}.rich a{color:#0066cc}.rich img{max-width:100%;height:auto}
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 </style></head><body><main id="app"></main>
 <script>
 const K='silvalympics-v1';
 let D=null;try{D=JSON.parse(localStorage.getItem(K)||'null')}catch(e){}
 D=D||{teams:[],games:[],matches:{},results:{},pw:'olympics'};
-const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){}};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){alert('Could not save. Storage may be full. Try smaller pictures.')}};
 let unlocked=false;
 const isOk=()=>{try{return sessionStorage.getItem('ok')=='1'}catch(e){return unlocked}};
 const setOk=v=>{unlocked=v;try{v?sessionStorage.setItem('ok','1'):sessionStorage.removeItem('ok')}catch(e){}};
@@ -47,7 +47,7 @@ const back=(h,t='Back')=>`<a class="back" href="#/${h}">&larr; ${t}</a>`;
 const tile=(h,t,i)=>`<a class="tile c${i%5}" href="#/${h}">${t}</a>`;
 const empty=t=>`<p class="muted">${t}</p>`;
 const val=id=>document.getElementById(id).value.trim();
-const OKT=new Set(['B','STRONG','I','EM','U','S','BR','P','DIV','SPAN','UL','OL','LI','H1','H2','H3','H4','A','TABLE','THEAD','TBODY','TR','TD','TH','BLOCKQUOTE','SUB','SUP']);
+const OKT=new Set(['B','STRONG','I','EM','U','S','BR','P','DIV','SPAN','UL','OL','LI','H1','H2','H3','H4','A','TABLE','THEAD','TBODY','TR','TD','TH','BLOCKQUOTE','SUB','SUP','IMG']);
 const BAD=new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','LINK','META','FORM','INPUT','BUTTON','TEXTAREA','SELECT','SVG','MATH','TEMPLATE']);
 const OKS=['color','background-color','font-weight','font-style','text-decoration','text-align'];
 function clean(html){
@@ -60,10 +60,10 @@ function clean(html){
       if(!OKT.has(c.tagName)){c.replaceWith(...c.childNodes);return}
       const keep=[];
       OKS.forEach(p=>{const v=c.style.getPropertyValue(p);if(v&&!/url|expression|javascript/i.test(v))keep.push(p+':'+v)});
-      const raw=c.tagName=='A'?(c.getAttribute('href')||''):'';
+      const raw=c.tagName=='A'?(c.getAttribute('href')||''):c.tagName=='IMG'?(c.getAttribute('src')||''):'';
       [...c.attributes].forEach(a=>c.removeAttribute(a.name));
       if(keep.length)c.setAttribute('style',keep.join(';'));
-      if(/^https?:\/\//i.test(raw)){c.setAttribute('href',raw);c.setAttribute('target','_blank');c.setAttribute('rel','noopener')}
+      if(c.tagName=='IMG'){if(/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(raw)||/^https:\/\//i.test(raw))c.setAttribute('src',raw);else c.remove()}else if(c.tagName=='A'&&/^https?:\/\//i.test(raw)){c.setAttribute('href',raw);c.setAttribute('target','_blank');c.setAttribute('rel','noopener')}
     });
   })(doc.body);
   return doc.body.innerHTML
@@ -71,6 +71,8 @@ function clean(html){
 const rulesHtml=g=>g.html?clean(g.html):esc(g.rules||'Rules have not been written yet.').replace(/\n/g,'<br>');
 const rulesEdit=g=>g.html?clean(g.html):esc(g.rules||'').replace(/\n/g,'<br>');
 const fmt=c=>document.execCommand(c);
+function shrink(file,cb){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,800/im.width),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL(file.type=='image/jpeg'?'image/jpeg':'image/png',0.85))};im.onerror=()=>cb(r.result);im.src=r.result};r.readAsDataURL(file)}
+document.addEventListener('paste',e=>{const t=e.target.closest?e.target.closest('#rt'):null;if(!t)return;const f=[...((e.clipboardData&&e.clipboardData.files)||[])].find(x=>/^image\/(png|jpe?g|gif|webp)$/.test(x.type));if(!f||(e.clipboardData.getData('text/plain')||'').trim())return;e.preventDefault();shrink(f,u=>document.execCommand('insertImage',false,u))});
 
 function wins(id){let w=0,l=0;const r=D.results[id]||{};for(const g of D.games){if(r[g.id]=='w')w++;if(r[g.id]=='l')l++}return{w,l}}
 
