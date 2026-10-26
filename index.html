@@ -123,7 +123,7 @@ function view(){
   else if(r=='enter'&&!a){
     h=back('','Home')+'<h1>Enter Results</h1><p>Pick your team.</p>'+(D.teams.length?'<div class="grid">'+D.teams.map((t,i)=>tile('enter/'+t.id,esc(t.name),i)).join('')+'</div>':empty('No teams yet.'))}
   else if(r=='enter'){
-    const t=T(a);h=back('enter','Teams')+(t?`<h1>${esc(t.name)}</h1><p>Tap a box: once for win, twice for lose, three times to clear.</p>`+(GM().length?GM().map(g=>{const s=(D.results[t.id]||{})[g.id];return`<div class="box"><h3>${esc(g.name)}</h3><button class="tg ${s||''}" onclick="tog('${t.id}','${g.id}')">${s=='w'?'WIN':s=='l'?'LOSE':'Tap to score'}</button></div>`}).join(''):empty('No games yet.')):empty('Team not found.'))}
+    const t=T(a);h=back('enter','Teams')+(t?`<h1>${esc(t.name)}</h1><p>Tap a box: once for win, twice for lose, three times to clear. Your opponent's box updates to match.</p>`+(GM().length?GM().map(g=>{const s=(D.results[t.id]||{})[g.id];return`<div class="box"><h3>${esc(g.name)}</h3><div class="muted">${(o=>o?'vs '+esc(o.name):'No opponent scheduled yet')(T(((D.matches[g.id]||{})[t.id]||{}).opp))}</div><button class="tg ${s||''}" onclick="tog('${t.id}','${g.id}')">${s=='w'?'WIN':s=='l'?'LOSE':'Tap to score'}</button></div>`}).join(''):empty('No games yet.')):empty('Team not found.'))}
   else if(r=='standings'){
     const rows=D.teams.map(t=>({t,...wins(t.id)})).sort((x,y)=>y.w-x.w||x.l-y.l);
     h=back('','Home')+'<h1>Standings</h1>'+(rows.length?rows.map((x,i)=>`<div class="box rank r${i+1}"><b>${i+1}</b><div><h3>${esc(x.t.name)}</h3><span class="muted">${x.w} wins, ${x.l} losses</span></div><span class="pts">${x.w}</span></div>`).join(''):empty('No teams yet.'))}
@@ -163,12 +163,12 @@ function addGame(){const n=val('ng');if(!n)return;D.games.push({id:uid(),name:n,
 function addSlot(){const n=val('ns');if(!n||D.slots.includes(n))return;D.slots.push(n);D.slots.sort((a,b)=>tk(a)-tk(b));save('slots');view()}
 function delSlot(i){D.slots.splice(i,1);save('slots');view()}
 function clearSchedule(){if(confirm('Remove every time and matchup? Teams, games and time slots stay.')){D.matches={};save('matches');rv()}}
-function clearItem(g,t){const m=D.matches[g]||{},e=m[t];if(!e)return;if(e.opp&&m[e.opp]){m[e.opp].opp='';m[e.opp].time=''}e.opp='';e.time='';save('matches');rv()}
+function clearItem(g,t){const m=D.matches[g]||{},e=m[t];if(!e)return;if(e.opp){setRes(t,g,null);setRes(e.opp,g,null)}if(e.opp&&m[e.opp]){m[e.opp].opp='';m[e.opp].time=''}e.opp='';e.time='';save('matches');rv()}
 function setAll(g,v){(D.matches[g]=D.matches[g]||{})._all={time:v};save('matches');rv()}
 function delGame(id){if(!confirm('Delete this item?'))return;D.games=D.games.filter(g=>g.id!=id);delete D.matches[id];save();view()}
 const rv=()=>{const y=scrollY;view();scrollTo(0,y)};
 const E=(g,t)=>{const m=D.matches[g]=D.matches[g]||{};return m[t]=m[t]||{opp:'',time:''}};
-function unpair(g,t){const m=D.matches[g]||{},e=m[t];if(!e)return;if(e.opp&&m[e.opp]&&m[e.opp].opp==t)m[e.opp].opp='';e.opp=''}
+function unpair(g,t){const m=D.matches[g]||{},e=m[t];if(!e)return;if(e.opp){setRes(t,g,null);setRes(e.opp,g,null)}if(e.opp&&m[e.opp]&&m[e.opp].opp==t)m[e.opp].opp='';e.opp=''}
 function setOpp(g,t,o){unpair(g,t);if(o){unpair(g,o);const a=E(g,t),b=E(g,o),tm=a.time||b.time||'';a.opp=o;b.opp=t;a.time=tm;b.time=tm}save('matches');rv()}
 function setTime(g,t,v){const e=E(g,t);e.time=v.trim();if(e.opp)E(g,e.opp).time=e.time;save('matches');rv()}
 async function saveRules(id){
@@ -179,6 +179,7 @@ async function saveRules(id){
   ok.textContent=k<n?' Saved, but a picture could not be kept. Use the Add picture button.':' Saved'}
 function addPic(inp){const f=inp.files[0];if(!f)return;shrink(f,u=>{const i=document.createElement('img'),d=document.getElementById('rt');i.src=u;d.appendChild(document.createElement('br'));d.appendChild(i);inp.value=''})}
 function setV(id,v){G(id).video=v.trim();save()}
-function tog(t,g){const r=D.results[t]=D.results[t]||{};r[g]=!r[g]?'w':r[g]=='w'?'l':null;if(DB)put('results/'+t+'/'+g,r[g]);else save();view()}
+function setRes(t,g,v){const r=D.results[t]=D.results[t]||{};if(v)r[g]=v;else delete r[g];if(DB)put('results/'+t+'/'+g,v||null);else save()}
+function tog(t,g){const cur=(D.results[t]||{})[g],nx=!cur?'w':cur=='w'?'l':null,o=((D.matches[g]||{})[t]||{}).opp;setRes(t,g,nx);if(o)setRes(o,g,nx=='w'?'l':nx=='l'?'w':null);view()}
 addEventListener('hashchange',view);view();pull(true);setInterval(pull,5000);
 </script></body></html>
