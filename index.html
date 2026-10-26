@@ -31,7 +31,7 @@ input,select,textarea{width:100%;padding:10px;border-radius:10px;border:2px soli
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
 </style></head><body><main id="app"></main>
 <script>
-const DB=''; // Paste your Firebase Realtime Database address between the quotes
+const DB='https://arilympics-default-rtdb.firebaseio.com'; // Paste your Firebase Realtime Database address between the quotes
 const K='silvalympics-v1';
 const arr=v=>Array.isArray(v)?v.filter(Boolean):Object.values(v||{});
 const mig=ms=>{const o={};for(const g in ms||{}){const m=ms[g]||{};if(typeof m.time=='string'||'a' in m||'b' in m){const n={};if(m.a)n[m.a]={opp:m.b||'',time:m.time||''};if(m.b)n[m.b]={opp:m.a||'',time:m.time||''};o[g]=n}else o[g]=m}return o};
@@ -63,7 +63,9 @@ const TYPES={game:'Game','break-all':'Break for all teams','break-two':'Break fo
 const typ=g=>g.type||'game',isG=g=>typ(g)=='game',GM=()=>D.games.filter(isG);
 const itemTime=(g,t)=>typ(g)=='break-all'?(((D.matches[g.id]||{})._all||{}).time||''):(((D.matches[g.id]||{})[t]||{}).time||'');
 const si=x=>{const i=D.slots.indexOf(x);return i<0?999:i};
-const tsel=(cur,js)=>`<select style="flex:1;min-width:130px;width:auto" onchange="${js}"><option value="">Choose a time</option>${D.slots.map(s=>`<option${s==cur?' selected':''}>${esc(s)}</option>`).join('')}${cur&&!D.slots.includes(cur)?`<option selected>${esc(cur)}</option>`:''}</select>`;
+const tsel=(cur,js,list)=>{list=list||D.slots;return`<select style="flex:1;min-width:130px;width:auto" onchange="${js}"><option value="">Choose a time</option>${list.map(s=>`<option${s==cur?' selected':''}>${esc(s)}</option>`).join('')}${cur&&!D.slots.includes(cur)?`<option selected>${esc(cur)}</option>`:''}</select>`};
+const slotOK=(g,t,o,s)=>{if(D.games.some(x=>x.id!=g.id&&(itemTime(x,t)==s||(o&&itemTime(x,o)==s))))return false;const m=D.matches[g.id]||{};for(const x in m){if(x=='_all'||x==t||x==o)continue;if(m[x].time==s)return false}return true};
+const allOK=(g,s)=>!D.games.some(x=>x.id!=g.id&&typ(x)=='break-all'&&itemTime(x,'')==s)&&D.teams.every(t=>!D.games.some(x=>x.id!=g.id&&itemTime(x,t.id)==s));
 const app=document.getElementById('app');
 const rings=()=>'<div class="rings"><i style="color:#0085c7"></i><i style="color:#f4c300"></i><i style="color:#2b2b2b"></i><i style="color:#009f3d"></i><i style="color:#df0024"></i></div>';
 const back=(h,t='Back')=>`<a class="back" href="#/${h}">&larr; ${t}</a>`;
@@ -132,11 +134,12 @@ function view(){
     h=back('admin','Admin')+'<h1>Schedule setup</h1><div class="box"><h3>Time slots</h3><div class="row"><input id="ns" placeholder="e.g. 10:00 AM"><button class="btn" onclick="addSlot()">Add time slot</button></div>'+(D.slots.length?D.slots.map((x,i)=>`<div class="row"><span style="flex:1">${esc(x)}</span><button class="btn del" onclick="delSlot(${i})">Remove</button></div>`).join(''):'<p class="muted">Add time slots in the order they happen. They become the choices when you schedule.</p>')+'</div><div class="box"><h3>Add to schedule</h3><input id="ng" placeholder="Name, e.g. Tug of war or Lunch"><select id="gt"><option value="game">Game</option><option value="break-all">Break for all teams</option><option value="break-two">Break for two teams</option></select><button class="btn" onclick="addGame()">Add</button></div>'+D.games.map(g=>`<div class="box row"><span style="flex:1">${esc(g.name)}<br><span class="muted">${TYPES[typ(g)]}</span></span><button class="btn del" onclick="delGame('${g.id}')">Delete</button></div>`).join('')+'<p><a class="btn" style="display:inline-block;text-decoration:none" href="#/admin/scheduling">Go to scheduling</a></p>'}
   else if(r=='admin'&&a=='scheduling'){
     const pairs=D.games.filter(g=>typ(g)!='break-all'),alls=D.games.filter(g=>typ(g)=='break-all');
-    const rowFor=(t,g)=>{const m=D.matches[g.id]||{},e=m[t.id]||{};
-      const opts='<option value="">No opponent yet</option>'+D.teams.filter(x=>x.id!=t.id).map(x=>{const xo=(m[x.id]||{}).opp,busy=xo&&xo!=t.id;return`<option value="${x.id}"${x.id==e.opp?' selected':''}${busy?' disabled':''}>${esc(x.name)}${busy?' (already playing '+esc((T(xo)||{}).name||'')+')':''}</option>`}).join('');
-      const mine=itemTime(g,t.id).trim().toLowerCase(),clash=mine&&D.games.find(o=>o.id!=g.id&&itemTime(o,t.id).trim().toLowerCase()==mine);
-      return`<div class="row" style="margin:8px 0"><b style="min-width:120px">${esc(g.name)}</b>${tsel(e.time||'',`setTime('${g.id}','${t.id}',this.value)`)}<select style="flex:1;min-width:150px;width:auto" onchange="setOpp('${g.id}','${t.id}',this.value)">${opts}</select>${clash?`<span style="color:var(--red)">Same time as ${esc(clash.name)}</span>`:''}</div>`};
-    h=back('admin/schedule','Setup')+'<h1>Scheduling</h1>'+(alls.length?`<div class="box"><h3>Breaks for everyone</h3>${alls.map(g=>`<div class="row" style="margin:8px 0"><b style="min-width:120px">${esc(g.name)}</b>${tsel(itemTime(g,''),`setAll('${g.id}',this.value)`)}</div>`).join('')}</div>`:'')+(pairs.length&&D.teams.length?'<p class="muted">Pick an opponent and the same item is filled in for them too.</p>'+D.teams.map(t=>`<div class="box"><h3>${esc(t.name)}</h3>${pairs.map(g=>rowFor(t,g)).join('')}</div>`).join(''):(alls.length?'':empty('Add teams and schedule items first.')))}
+    const rowFor=(t,g)=>{const m=D.matches[g.id]||{},e=m[t.id]||{},o=T(e.opp),nm=`<b style="min-width:120px">${esc(g.name)}</b>`;
+      if(o&&e.time)return`<div class="row" style="margin:8px 0">${nm}<span style="flex:1">${esc(e.time)} vs ${esc(o.name)}</span><button class="btn del" onclick="clearItem('${g.id}','${t.id}')">Clear</button></div>`;
+      const slots=D.slots.filter(x=>x==e.time||slotOK(g,t.id,e.opp||'',x));
+      const opts='<option value="">No opponent yet</option>'+D.teams.filter(x=>x.id!=t.id).map(x=>{const xe=m[x.id]||{},taken=xe.opp&&xe.opp!=t.id,sl=e.time||xe.time||'',bad=!taken&&sl&&!slotOK(g,t.id,x.id,sl),why=taken?' (already playing '+esc((T(xe.opp)||{}).name||'')+')':bad?' (not free then)':'';return`<option value="${x.id}"${x.id==e.opp?' selected':''}${taken||bad?' disabled':''}>${esc(x.name)}${why}</option>`}).join('');
+      return`<div class="row" style="margin:8px 0">${nm}${tsel(e.time||'',`setTime('${g.id}','${t.id}',this.value)`,slots)}<select style="flex:1;min-width:150px;width:auto" onchange="setOpp('${g.id}','${t.id}',this.value)">${opts}</select></div>`};
+    h=back('admin/schedule','Setup')+'<h1>Scheduling</h1><p class="muted">Each time list only shows times that are free for the team and the item. Once an item is set, use Clear to change it.</p>'+(alls.length?`<div class="box"><h3>Breaks for everyone</h3>${alls.map(g=>{const c=itemTime(g,'');return`<div class="row" style="margin:8px 0"><b style="min-width:120px">${esc(g.name)}</b>${tsel(c,`setAll('${g.id}',this.value)`,D.slots.filter(x=>x==c||allOK(g,x)))}</div>`}).join('')}</div>`:'')+(pairs.length&&D.teams.length?D.teams.map(t=>`<div class="box"><h3>${esc(t.name)}</h3>${pairs.map(g=>rowFor(t,g)).join('')}</div>`).join(''):(alls.length?'':empty('Add teams and schedule items first.')))}
   else if(r=='admin'&&a=='rules'&&!p[2]){
     h=back('admin','Admin')+'<h1>Write rules</h1>'+(GM().length?'<div class="grid">'+GM().map((g,i)=>tile('admin/rules/'+g.id,esc(g.name),i)).join('')+'</div>':empty('Add games first.'))}
   else if(r=='admin'&&a=='rules'){
@@ -158,6 +161,7 @@ function delMember(id,i){T(id).members.splice(i,1);save();view()}
 function addGame(){const n=val('ng');if(!n)return;D.games.push({id:uid(),name:n,type:document.getElementById('gt').value,rules:'',video:''});save();view()}
 function addSlot(){const n=val('ns');if(!n||D.slots.includes(n))return;D.slots.push(n);save('slots');view()}
 function delSlot(i){D.slots.splice(i,1);save('slots');view()}
+function clearItem(g,t){const m=D.matches[g]||{},e=m[t];if(!e)return;if(e.opp&&m[e.opp]){m[e.opp].opp='';m[e.opp].time=''}e.opp='';e.time='';save('matches');rv()}
 function setAll(g,v){(D.matches[g]=D.matches[g]||{})._all={time:v};save('matches');rv()}
 function delGame(id){if(!confirm('Delete this item?'))return;D.games=D.games.filter(g=>g.id!=id);delete D.matches[id];save();view()}
 const rv=()=>{const y=scrollY;view();scrollTo(0,y)};
